@@ -4,25 +4,41 @@ import pandas as pd
 import nltk
 import numpy as np
 import datetime
+import gc
+from nltk.stem.snowball import SnowballStemmer
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import confusion_matrix
 
 random_seed = 23
 
-data = pd.read_csv('data/train_wMeta.csv')
+stemmer = SnowballStemmer('english')
+
+def recursive_stem(token):
+    new_token = stemmer.stem(token)
+    if new_token == token:
+        return token
+    else:
+        return recursive_stem(new_token)
+
+data = pd.read_csv('data/train_wMeta.csv', encoding='cp950')
+
 comments = data['comment_text'].as_matrix()
 tocix_results = data['toxic'].as_matrix()
-
 noun_cnts = data['noun_cnt'].as_matrix()
 verb_cnts = data['verb_cnt'].as_matrix()
 adj_cnts = data['adj_cnt'].as_matrix()
 adv_cnts = data['adv_cnt'].as_matrix()
 
+del(data)
+gc.collect()
+
 noun_tokens_comments = []
 adj_tokens_comments = []
-words = []
+words = dict()
 comments_length = []
 
+print('Start Collect Data')
+collect_start = datetime.datetime.now()
 for comment in comments:
     comments_length.append(len(comment))
     noun_tokens = []
@@ -30,20 +46,28 @@ for comment in comments:
     tokens = nltk.word_tokenize(comment)
     pos_tags = nltk.pos_tag(tokens)
     for pos_tag in pos_tags:
+        word = recursive_stem(pos_tag[0])
         tag_type = pos_tag[1]
         if 'NN' in tag_type:
-            noun_tokens.append(pos_tag[0])
-            words.append(pos_tag[0])
+            noun_tokens.append(word)
+            words[word] = words.get(word, 0) + 1
         elif 'JJ' in tag_type:
-            adj_tokens.append(pos_tag[0])
-            words.append(pos_tag[0])
-            
+            adj_tokens.append(word)
+            words[word] = words.get(word, 0) + 1
     noun_tokens_comments.append(noun_tokens)
     adj_tokens_comments.append(adj_tokens)
+    
+collect_end = datetime.datetime.now()
+print('Collect data completed, time consume: {}'.format(collect_end - collect_start))
+
+words = list(words.keys())
+
+del(comments)
+gc.collect()
   
 conv_start = datetime.datetime.now()
 X = []
-for index in range(len(comments)):
+for index in range(len(comments_length)):
     noun_tokens = noun_tokens_comments[index]
     adj_tokens = adj_tokens_comments[index]
     noun_cnt = noun_cnts[index]
@@ -53,8 +77,10 @@ for index in range(len(comments)):
     comment_length = comments_length[index]
     one_hot = np.zeros(len(words) + 1 + 4 + 1, dtype=int)
     for noun_token in noun_tokens:
+        noun_token = recursive_stem(noun_token)
         one_hot[words.index(noun_token)] = 1
     for adj_token in adj_tokens:
+        adj_token = recursive_stem(adj_token)
         one_hot[words.index(adj_token)] = 1
     meta_index_start = len(words)+1
     one_hot[meta_index_start+0] = noun_cnt
@@ -74,6 +100,10 @@ train_x = X[0:train_size]
 test_x = X[train_size:]
 train_y = Y[0:train_size]
 test_y = Y[train_size:]
+
+del(X)
+del(Y)
+gc.collect()
            
 train_start = datetime.datetime.now()
 model = RandomForestClassifier(random_state=random_seed, n_jobs=4)
