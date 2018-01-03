@@ -5,6 +5,7 @@ import nltk
 import numpy as np
 import datetime
 import gc
+import pickle
 from nltk.stem.snowball import SnowballStemmer
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import confusion_matrix
@@ -20,7 +21,7 @@ def recursive_stem(token):
     else:
         return recursive_stem(new_token)
 
-data = pd.read_csv('data/train_wMeta.csv', encoding='cp950')
+data = pd.read_csv('data/train_wMeta.csv', encoding='utf-8')
 
 comments = data['comment_text'].as_matrix()
 tocix_results = data['toxic'].as_matrix()
@@ -94,6 +95,10 @@ Y = tocix_results
 conv_end = datetime.datetime.now()
 print('Convert data to vector completed, time consume: {}'.format(conv_end - conv_start))
 
+f = open('data/X.list', 'wb')
+pickle.dump(X, f)
+f.close()
+
 ttl_size = len(X)
 train_size =  int(ttl_size * 0.8)
 train_x = X[0:train_size]
@@ -112,6 +117,11 @@ train_end = datetime.datetime.now()
 print('Train model completed, time consume: {}'.format(train_end - train_start))
 
 predict_y = model.predict(test_x)
+
+f = open('data/predict_y.npy', 'wb')
+pickle.dump(predict_y, f)
+f.close()
+
 tn, fp, fn, tp = confusion_matrix(test_x, predict_y).ravel()
 try:
     precision = tp / (tp+fp)
